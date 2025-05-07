@@ -24,66 +24,118 @@ app.get("/", (req, res) => {
   res.send("server is working");
 });
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+app.post("/upload", upload.array("files"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).send("No file uploaded.");
     }
+    const documentsData = [];
 
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const json = XLSX.utils.sheet_to_json(sheet);
+    // const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    // const sheetName = workbook.SheetNames[0];
+    // const sheet = workbook.Sheets[sheetName];
+    // const json = XLSX.utils.sheet_to_json(sheet);
 
+
+    for (const file of req.files) {
+      const workbook = XLSX.read(file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet);
+      documentsData.push(json);
+    }
     const cleanedData = JSON.stringify(json);
 
-    const prompt = `You are a helpful assistant. Extract the following sections from the provided CONTEXT and return a JSON object .so your response should always start with "{":
 
-    1. **Reference Number**: Extract the reference number from the context.
-    2. **Customer Name**: Extract the customer name from the context.
-    3. **Location**: Extract the location from the context.
+    
 
-    4. **Solution BOQ (Investment plan)**: Provide as a complete JSON array with the fields:
-       - Item
-       - Qty
-       - Unit Price
-       - Total Cost (Rs.)
-       - Total Tax (Rs.): NBT
-       - Total Cost Social Security Levy (Rs.)
-       - Total Tax (Rs.): 18% VAT
-       - Total Cost with Taxes (Rs.)
+    // const prompt = `You are a helpful assistant. Extract the following sections from the provided CONTEXT and return a JSON object .so your response should always start with "{":
 
-    5. **Optional Items**: Provide as a complete valid JSON array with the same fields as above.
+    // 1. **Reference Number**: Extract the reference number from the context.
+    // 2. **Customer Name**: Extract the customer name from the context.
+    // 3. **Location**: Extract the location from the context.
 
-    6. **Terms & Conditions**: List them as individual points. If nested, maintain the structure. If not found, return null.
+    // 4. **Solution BOQ (Investment plan)**: Provide as a complete JSON array with the fields:
+    //    - Item
+    //    - Qty
+    //    - Unit Price
+    //    - Total Cost (Rs.)
+    //    - Total Tax (Rs.): NBT
+    //    - Total Cost Social Security Levy (Rs.)
+    //    - Total Tax (Rs.): 18% VAT
+    //    - Total Cost with Taxes (Rs.)
 
-    Ensure that:
-    - All rows are included, even if they have empty or missing values (use "null" for missing values).
-    - Exclude headers or non-relevant fields.
-    - Do not change the format or value of any data.
-    - If no data is found for a section, return an empty array or null as appropriate.
+    // 5. **Optional Items**: Provide as a complete valid JSON array with the same fields as above.
 
-    **CONTEXT:**
-    ${cleanedData}
+    // 6. **Terms & Conditions**: List them as individual points. If nested, maintain the structure. If not found, return null.
 
-    Please provide your response as a valid JSON object only. Do not include any markdown, text formatting, or extra characters. The response should be in plain JSON format without any surrounding backticks or language identifiers.the response format is given below
+    // Ensure that:
+    // - All rows are included, even if they have empty or missing values (use "null" for missing values).
+    // - Exclude headers or non-relevant fields.
+    // - Do not change the format or value of any data.
+    // - If no data is found for a section, return an empty array or null as appropriate.
+
+    // **CONTEXT:**
+    // ${cleanedData}
+
+    // Please provide your response as a valid JSON object only. Do not include any markdown, text formatting, or extra characters. The response should be in plain JSON format without any surrounding backticks or language identifiers.the response format is given below
 
   
-    {
-      "referenceNumber": "<Reference Number>",
-      "customerName": "<Customer Name>",
-      "designation": "<Designation>",
-      "companyName": "<Company Name>",
-      "requirements": "<Requirements>",
-      "Address": "<Address>",
-      "location": "<Location>",
-      "ProjectScope": [summary of project scope],
-      "solutionBOQ": [...],
-      "optionalItems": [...],
-      "termsAndConditions": [delivery period,terms of payment,validity of the offer,waranty,presventive and corrective maintenance,maintainance window,falicily requirements,complementary services,other remarks],
-    }
+    // {
+    //   "referenceNumber": "<Reference Number>",
+    //   "customerName": "<Customer Name>",
+    //   "designation": "<Designation>",
+    //   "companyName": "<Company Name>",
+    //   "requirements": "<Requirements>",
+    //   "Address": "<Address>",
+    //   "location": "<Location>",
+    //   "ProjectScope": [summary of project scope],
+    //   "solutionBOQ": [...],
+    //   "optionalItems": [...],
+    //   "termsAndConditions": [delivery period,terms of payment,validity of the offer,waranty,presventive and corrective maintenance,maintainance window,falicily requirements,complementary services,other remarks],
+    // }
 
-    `;
+    // `;
+
+    const prompt = `You are a helpful assistant. You will receive multiple similar CONTEXTS where all fields except pricing are mostly the same. Your task:
+
+1. Extract shared fields **once only**: referenceNumber, customerName, location, etc.
+2. Extract all pricing BOQs and return them as:
+   - "solutionBOQs": [ { "source": "Document 1", ...BOQ }, { "source": "Document 2", ...BOQ } ]
+3. Include "optionalItems" the same way if present.
+4. Other fields like termsAndConditions should be merged if similar, or shown as an array if different.
+
+Ensure JSON is valid. Use "null" where values are missing.
+
+**CONTEXTS:**
+${JSON.stringify(documentsData)}
+
+Response format:
+
+{
+  "referenceNumber": "<Reference Number>",
+  "customerName": "<Customer Name>",
+  "designation": "<Designation>",
+  "companyName": "<Company Name>",
+  "requirements": "<Requirements>",
+  "Address": "<Address>",
+  "location": "<Location>",
+  "ProjectScope": [summary of project scope],
+  "solutionBOQs": [
+    {
+      "source": "Document 1",
+      "items": [ ...BOQ rows... ]
+    },
+    {
+      "source": "Document 2",
+      "items": [ ...BOQ rows... ]
+    }
+  ],
+  "optionalItems": [...],
+  "termsAndConditions": [delivery period,terms of payment,validity of the offer,waranty,presventive and corrective maintenance,maintainance window,falicily requirements,complementary services,other remarks]
+}
+`;
+
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -92,6 +144,8 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     });
 
     const assistantResponse = response.choices[0].message.content;
+
+    console.log("assistantResponse : ", assistantResponse)
 
     res.json(assistantResponse);
   } catch (error) {
