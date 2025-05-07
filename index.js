@@ -26,7 +26,7 @@ app.get("/", (req, res) => {
 
 app.post("/upload", upload.array("files"), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.files) {
       return res.status(400).send("No file uploaded.");
     }
     const documentsData = [];
