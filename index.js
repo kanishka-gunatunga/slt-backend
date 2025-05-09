@@ -44,8 +44,8 @@ app.post("/upload", upload.array("files"), async (req, res) => {
       const json = XLSX.utils.sheet_to_json(sheet);
       documentsData.push(json);
     }
-    const cleanedData = JSON.stringify(json);
-
+    // const cleanedData = JSON.stringify(json);
+console.log("DOC : ",JSON.stringify(documentsData))
 
     
 
